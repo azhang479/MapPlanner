@@ -1,9 +1,9 @@
 import { Component, signal } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { MapComponent } from "./map-component/map-component";
 
 @Component({
   selector: 'app-root',
-  imports: [RouterOutlet],
+  imports: [MapComponent],
   templateUrl: './app.html',
   styleUrl: './app.sass'
 })
