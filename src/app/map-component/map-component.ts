@@ -1,6 +1,6 @@
-import { Component, AfterViewInit, inject, CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
+import { Component, AfterViewInit, inject, CUSTOM_ELEMENTS_SCHEMA, NgZone} from '@angular/core';
+import { PLATFORM_ID, ChangeDetectorRef } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
-import { PLATFORM_ID } from '@angular/core';
 
 @Component({
   selector: 'app-map-component',
@@ -13,17 +13,42 @@ import { PLATFORM_ID } from '@angular/core';
 export class MapComponent {
   private platformID = inject(PLATFORM_ID);
   private map: any;
+  public addMarkerMode = false;
+  private markers: mapboxgl.Marker[] = [];
+  private mapboxgl!: typeof import('mapbox-gl');
+  private zone = inject(NgZone);
+  private cdr = inject(ChangeDetectorRef);
+
+  
+  private onMapClick = (e: any) => {
+    console.log("onClick")
+    console.log("marker mode:", this.addMarkerMode)
+    const coords = e.lngLat
+    if (!this.addMarkerMode) return;
+    const marker = new this.mapboxgl.Marker({ color: '#FF0000', scale: 0.9 })
+      .setLngLat([coords["lng"], coords["lat"]])
+      .addTo(this.map);
+
+    this.markers.push(marker);
+    this.zone.run(() => {
+      this.addMarkerMode = false;
+      this.cdr.detectChanges();
+
+    });
+  };
+
+
 
   async ngAfterViewInit(): Promise<void> {
     // Skip on the server (prevents "document is not defined")
     if (!isPlatformBrowser(this.platformID)) return;
-    
     // Lazy-import so mapbox-gl isn't evaluated during SSR
-    const mapboxgl = (await import('mapbox-gl')).default;
+    const mapboxglMod: any = await import('mapbox-gl');
+    const mapboxgl = mapboxglMod.default ?? mapboxglMod;
+    mapboxgl.accessToken = 'pk.eyJ1IjoiMjNhemhhbmciLCJhIjoiY21qNXgyZTliMDZ3bDNmcTA5cGpjMGJxeSJ9.8WzQ1ADAhCJGMos5P5nsrw';
+    this.mapboxgl = mapboxgl
 
-    mapboxgl.accessToken =
-      'pk.eyJ1IjoiMjNhemhhbmciLCJhIjoiY21qNXgyZTliMDZ3bDNmcTA5cGpjMGJxeSJ9.8WzQ1ADAhCJGMos5P5nsrw';
-
+    //create new map
     this.map = new mapboxgl.Map({
       container: 'map', // container id
       style: 'mapbox://styles/mapbox/streets-v12', //style
@@ -31,8 +56,9 @@ export class MapComponent {
       zoom: 9 //starting zoom
     });
     
-    await import('@mapbox/search-js-web');
 
+
+    //add placeholder marker
     const marker = new mapboxgl.Marker({
       color: '#FF0000',
       scale: .8
@@ -40,9 +66,14 @@ export class MapComponent {
     .setLngLat([-74.5, 40])
     .addTo(this.map);
     
+
+
+    //import search function and sync proximity to our viewbox
+    await import('@mapbox/search-js-web');
     const searchBox = document.getElementById('searchbox') as any;
     searchBox.accessToken = mapboxgl.accessToken;
-
+    //whenever we move, sync the searchbox to the user's location
+    //gives user more relevant locations
     const syncToViewport = () => {
       console.log("moved")
       const center = this.map.getCenter();
@@ -52,14 +83,15 @@ export class MapComponent {
         limit: 10
       };
     };
-
     // Run once and then whenever the user pans/zooms
     syncToViewport();
     this.map.on('moveend', syncToViewport);
 
-    // Optional: zoom to selected result + drop marker
+
+
+    //currently zooms into location when a location is retireved 
     searchBox.addEventListener('retrieve', (e: any) => {
-      console.log(e.detail)
+      console.log("retrieved a location")
       const feature = e.detail;
       const first = feature?.features?.[0];
 
@@ -70,7 +102,30 @@ export class MapComponent {
 
       const [lng, lat] = first.geometry.coordinates;
       this.map.flyTo({ center: [lng, lat], zoom: 15 });
-      new mapboxgl.Marker().setLngLat([lng, lat]).addTo(this.map);
     });
+
+
+    //add geolocation (locates the user)
+    this.map.addControl(
+      new mapboxgl.GeolocateControl({
+        positionOptions: {
+            enableHighAccuracy: true
+        },
+        trackUserLocation: true,
+        showUserHeading: true,
+    }));
+
+    this.map.on('click', this.onMapClick);
+  }
+
+
+
+  //toggles add marker
+  toggleAddMarkerMode() {
+    this.addMarkerMode = !this.addMarkerMode;
+  }
+  //destroys all markers on map close
+  ngOnDestroy() {
+    if (this.map) this.map.off('click', this.onMapClick);
   }
 }

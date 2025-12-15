@@ -3,3 +3,9 @@
 <div class="search-overlay">
   <mapbox-search-box id="searchbox"></mapbox-search-box>
 </div>
+
+<div class="controls">
+<button type="button" (click)="toggleAddMarkerMode()">
+    {{ addMarkerMode ? 'Cancel' : 'Add marker' }}
+  </button>
+</div>
