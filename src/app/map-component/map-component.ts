@@ -1,4 +1,4 @@
-import { Component, AfterViewInit, inject, CUSTOM_ELEMENTS_SCHEMA, NgZone} from '@angular/core';
+import { Component, AfterViewInit, inject, CUSTOM_ELEMENTS_SCHEMA, NgZone, provideAppInitializer} from '@angular/core';
 import { PLATFORM_ID, ChangeDetectorRef } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
@@ -18,23 +18,57 @@ export class MapComponent {
   private mapboxgl!: typeof import('mapbox-gl');
   private zone = inject(NgZone);
   private cdr = inject(ChangeDetectorRef);
-
+  private markerCount = 1;
   
+
+
+  //method for adding a marker on click based on addMarkerMode
   private onMapClick = (e: any) => {
     console.log("onClick")
     console.log("marker mode:", this.addMarkerMode)
     const coords = e.lngLat
+
     if (!this.addMarkerMode) return;
     const marker = new this.mapboxgl.Marker({ color: '#FF0000', scale: 0.9 })
       .setLngLat([coords["lng"], coords["lat"]])
-      .addTo(this.map);
+      .setDraggable(true)
 
+    const popupElement = document.createElement('div');
+    popupElement.innerHTML = `
+      <h1>Custom marker ${this.markerCount}</h1>
+      <button type="button">remove</button>
+    `;
+    const removeButton = popupElement.querySelector('button')!;
+    removeButton.addEventListener('click', () => {
+      marker.remove();
+      this.markerCount--;
+      this.markers = this.markers.filter(m => m !== marker);
+    });
+    const popup = new this.mapboxgl.Popup({ offset: 25 }).setDOMContent(popupElement);
+
+    marker.setPopup(popup);
+    this.markerCount++;
     this.markers.push(marker);
+    this.updateMarkers()
+
     this.zone.run(() => {
       this.addMarkerMode = false;
       this.cdr.detectChanges();
-
     });
+  };
+
+
+
+  //removes and updates all markers on the map
+  updateMarkers() {
+    this.markers.forEach(marker => {
+      marker.remove()
+    })
+
+    this.markers.forEach(marker => {
+      marker.addTo(this.map)
+    })
+    console.log("updated all markers")
   };
 
 
@@ -55,17 +89,7 @@ export class MapComponent {
       center: [-74.5, 40], //starting pos
       zoom: 9 //starting zoom
     });
-    
-
-
-    //add placeholder marker
-    const marker = new mapboxgl.Marker({
-      color: '#FF0000',
-      scale: .8
-    })
-    .setLngLat([-74.5, 40])
-    .addTo(this.map);
-    
+      
 
 
     //import search function and sync proximity to our viewbox
@@ -94,15 +118,14 @@ export class MapComponent {
       console.log("retrieved a location")
       const feature = e.detail;
       const first = feature?.features?.[0];
-
       if (!first) {
         console.warn('No features returned from retrieve:', feature);
         return;
       }
-
       const [lng, lat] = first.geometry.coordinates;
       this.map.flyTo({ center: [lng, lat], zoom: 15 });
     });
+
 
 
     //add geolocation (locates the user)
