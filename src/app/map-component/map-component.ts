@@ -2,6 +2,13 @@ import { Component, AfterViewInit, inject, CUSTOM_ELEMENTS_SCHEMA, NgZone, provi
 import { PLATFORM_ID, ChangeDetectorRef } from '@angular/core';
 import { isPlatformBrowser } from '@angular/common';
 
+//All entries needed to describe a marker
+type MarkerEntry = {
+  marker: mapboxgl.Marker; 
+  editable: boolean;
+  id: number;
+};
+
 @Component({
   selector: 'app-map-component',
   imports: [],
@@ -10,11 +17,12 @@ import { isPlatformBrowser } from '@angular/common';
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
 })
 
+
 export class MapComponent {
   private platformID = inject(PLATFORM_ID);
   private map: any;
   public addMarkerMode = false;
-  private markers: mapboxgl.Marker[] = [];
+  private markers: MarkerEntry[] = [];
   private mapboxgl!: typeof import('mapbox-gl');
   private zone = inject(NgZone);
   private cdr = inject(ChangeDetectorRef);
@@ -24,33 +32,55 @@ export class MapComponent {
 
   //method for adding a marker on click based on addMarkerMode
   private onMapClick = (e: any) => {
+    //console logs and checks
     console.log("onClick")
     console.log("marker mode:", this.addMarkerMode)
     const coords = e.lngLat
-
     if (!this.addMarkerMode) return;
+
+    //create new marker & marker entry as placeholders
     const marker = new this.mapboxgl.Marker({ color: '#FF0000', scale: 0.9 })
       .setLngLat([coords["lng"], coords["lat"]])
       .setDraggable(true)
+    const entry: MarkerEntry = {
+      marker: marker,
+      editable: false,
+      id: this.markerCount
+    };
 
+    //create the popup
     const popupElement = document.createElement('div');
     popupElement.innerHTML = `
-      <h1>Custom marker ${this.markerCount}</h1>
-      <button type="button">remove</button>
+      <h1 contenteditable="${entry.editable}">Custom marker ${this.markerCount}</h1>
+      <button id="removeButton" type="button">remove</button> 
+      <button id="editButton" type="button">edit</button>
     `;
-    const removeButton = popupElement.querySelector('button')!;
+
+    //set button actions
+    const removeButton = popupElement.querySelector('#removeButton')!;
     removeButton.addEventListener('click', () => {
       marker.remove();
       this.markerCount--;
-      this.markers = this.markers.filter(m => m !== marker);
+      this.markers = this.markers.filter(e => e.marker !== marker);
     });
-    const popup = new this.mapboxgl.Popup({ offset: 25 }).setDOMContent(popupElement);
+    const editButton = popupElement.querySelector('#editButton')!;
+    editButton.addEventListener('click', () => {
+        entry.editable = !entry.editable;
+    });
 
+    //create popup with the HTML and set it on the marker
+    const popup = new this.mapboxgl.Popup({ offset: 25 }).setDOMContent(popupElement);
     marker.setPopup(popup);
+
+    //store marker with popup as marker
+    entry.marker = marker
+
+    //push onto list 
     this.markerCount++;
-    this.markers.push(marker);
+    this.markers.push(entry);
     this.updateMarkers()
 
+    //update "add marker" button
     this.zone.run(() => {
       this.addMarkerMode = false;
       this.cdr.detectChanges();
@@ -61,12 +91,12 @@ export class MapComponent {
 
   //removes and updates all markers on the map
   updateMarkers() {
-    this.markers.forEach(marker => {
-      marker.remove()
+    this.markers.forEach(entry => {
+      entry.marker.remove()
     })
 
-    this.markers.forEach(marker => {
-      marker.addTo(this.map)
+    this.markers.forEach(entry => {
+      entry.marker.addTo(this.map)
     })
     console.log("updated all markers")
   };
