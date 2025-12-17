@@ -1,11 +1,59 @@
 <div id="map" class="map-container"></div>
 
+
+
 <div class="search-overlay">
   <mapbox-search-box id="searchbox"></mapbox-search-box>
 </div>
 
-<div class="controls">
-<button type="button" (click)="toggleAddMarkerMode()">
+
+
+<div class="add-marker">
+  <button type="button" (click)="toggleAddMarkerMode()">
     {{ addMarkerMode ? 'Cancel' : 'Add marker' }}
   </button>
+</div>
+
+
+
+<button class="planner-toggle" type="button" (click)="togglePlanner()">
+  {{ plannerCollapsed ? '>' : '<' }}
+</button>
+
+
+
+<div
+  class="planner"
+  [class.collapsed]="plannerCollapsed"
+  cdkDrag
+  (cdkDragEnded)="onPlannerDragEnd($event)"
+  [cdkDragFreeDragPosition]="plannerPos"
+>
+  <div class="planner-header" cdkDragHandle>
+    <span>Planner</span>
+    <span class="hint">drag me</span>
+  </div>
+
+  <div class="planner-content">
+    <div class="marker-list">
+      <div class="marker-row" *ngFor="let m of markers; let i = index">
+        <div class="order">{{ i + 1 }}</div>
+
+        <div class="meta">
+          <div class="title">{{ m.name }}</div>
+          <div class="sub">
+            {{ m.marker.getLngLat().lat.toFixed(5) }},
+            {{ m.marker.getLngLat().lng.toFixed(5) }}
+          </div>
+        </div>
+
+        <div class="controls">
+          <button type="button" (click)="moveMarkerUp(i)" [disabled]="i === 0">▲</button>
+          <button type="button" (click)="moveMarkerDown(i)" [disabled]="i === markers.length - 1">▼</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="resize-handle"></div>
 </div>

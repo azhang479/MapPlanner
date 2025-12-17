@@ -1,17 +1,21 @@
 import { Component, AfterViewInit, inject, CUSTOM_ELEMENTS_SCHEMA, NgZone, provideAppInitializer} from '@angular/core';
 import { PLATFORM_ID, ChangeDetectorRef } from '@angular/core';
-import { isPlatformBrowser } from '@angular/common';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
+import { CdkDragEnd, DragDropModule } from '@angular/cdk/drag-drop';
+import { moveItemInArray } from '@angular/cdk/drag-drop';
 
 //All entries needed to describe a marker
 type MarkerEntry = {
   marker: mapboxgl.Marker; 
   editable: boolean;
+  name: string;
   id: number;
 };
 
 @Component({
+  standalone: true,
   selector: 'app-map-component',
-  imports: [],
+  imports: [DragDropModule, CommonModule],
   templateUrl: './map-component.html',
   styleUrl: './map-component.sass',
   schemas: [CUSTOM_ELEMENTS_SCHEMA],
@@ -21,13 +25,15 @@ type MarkerEntry = {
 export class MapComponent {
   private platformID = inject(PLATFORM_ID);
   private map: any;
-  public addMarkerMode = false;
-  private markers: MarkerEntry[] = [];
   private mapboxgl!: typeof import('mapbox-gl');
   private zone = inject(NgZone);
   private cdr = inject(ChangeDetectorRef);
   private markerCount = 1;
-  
+  public markers: MarkerEntry[] = [];
+  public addMarkerMode = false;
+  public plannerCollapsed = false;
+  public plannerPos = { x: 0, y: 0 };
+
 
 
   //method for adding a marker on click based on addMarkerMode
@@ -45,13 +51,14 @@ export class MapComponent {
     const entry: MarkerEntry = {
       marker: marker,
       editable: false,
-      id: this.markerCount
+      name: `Custom marker ${this.markerCount}`,
+      id: this.markerCount,
     };
 
     //create the popup
     const popupElement = document.createElement('div');
     popupElement.innerHTML = `
-      <h1 contenteditable="${entry.editable}">Custom marker ${this.markerCount}</h1>
+      <h1 contenteditable="${entry.editable}">${entry.name}</h1>
       <button id="removeButton" type="button">remove</button> 
       <button id="editButton" type="button">edit</button>
     `;
@@ -61,12 +68,30 @@ export class MapComponent {
     removeButton.addEventListener('click', () => {
       marker.remove();
       this.markerCount--;
-      this.markers = this.markers.filter(e => e.marker !== marker);
+      this.zone.run(() => {
+        this.markers = this.markers.filter(e => e.marker !== marker);
+        this.cdr.detectChanges();
+      });
     });
+
+    const editElement = popupElement.querySelector('h1') as HTMLElement;
+
     const editButton = popupElement.querySelector('#editButton')!;
     editButton.addEventListener('click', () => {
+      this.zone.run(() => {
         entry.editable = !entry.editable;
+        editElement.contentEditable = String(entry.editable);
+        editElement.focus();
+        this.cdr.detectChanges();
+      });
     });
+    editElement.addEventListener('blur', () => {
+      this.zone.run(() => {
+        entry.name = editElement.innerText.trim() || entry.name;
+        this.cdr.detectChanges();
+      });
+    });
+
 
     //create popup with the HTML and set it on the marker
     const popup = new this.mapboxgl.Popup({ offset: 25 }).setDOMContent(popupElement);
@@ -78,7 +103,7 @@ export class MapComponent {
     //push onto list 
     this.markerCount++;
     this.markers.push(entry);
-    this.updateMarkers()
+    this.updateMarkers();
 
     //update "add marker" button
     this.zone.run(() => {
@@ -86,6 +111,14 @@ export class MapComponent {
       this.cdr.detectChanges();
     });
   };
+
+
+  //gets the position of drag then sets the planner position
+  //allows planner to be dragged
+  onPlannerDragEnd(e: CdkDragEnd) {
+    const p = e.source.getFreeDragPosition();
+    this.plannerPos = { x: p.x, y: p.y };
+  }
 
 
 
@@ -168,17 +201,71 @@ export class MapComponent {
         showUserHeading: true,
     }));
 
+    //dont work rn
+    /*
+    var coords: any[];
+    this.markers.forEach(marker => {
+      coords.push(marker.marker.getLngLat())
+    });
+    
+    this.map.addSource('route', {
+        'type': 'geojson',
+        'data': {
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {
+                'type': 'LineString',
+                'coordinates': coords!
+            }
+    }
+  });
+
+    this.map.addLayer({
+        'id': 'route',
+        'type': 'line',
+        'source': 'route',
+        'layout': {
+            'line-join': 'round',
+            'line-cap': 'round'
+        },
+        'paint': {
+            'line-color': '#888',
+            'line-width': 8
+        }
+    });
+    */
     this.map.on('click', this.onMapClick);
   }
-
 
 
   //toggles add marker
   toggleAddMarkerMode() {
     this.addMarkerMode = !this.addMarkerMode;
   }
+
   //destroys all markers on map close
   ngOnDestroy() {
     if (this.map) this.map.off('click', this.onMapClick);
+  }
+
+  //toggles planner
+  togglePlanner() {
+    this.plannerCollapsed = !this.plannerCollapsed;
+  }
+
+  //moves the marker up
+  moveMarkerUp(i: number) {
+    if (i <= 0) return;
+    [this.markers[i - 1], this.markers[i]] = [this.markers[i], this.markers[i - 1]];
+    this.updateMarkers();
+    // later: this.rebuildRouteFromMarkers();
+  }
+
+  //moves the marker down
+  moveMarkerDown(i: number) {
+    if (i >= this.markers.length - 1) return;
+    [this.markers[i + 1], this.markers[i]] = [this.markers[i], this.markers[i + 1]];
+    this.updateMarkers();
+    // later: this.rebuildRouteFromMarkers();
   }
 }

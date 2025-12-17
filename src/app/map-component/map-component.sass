@@ -4,6 +4,7 @@
   height: 100vh
   width: 100%
 
+
 .map-container
   position: absolute
   inset: 0
@@ -11,19 +12,119 @@
 .search-overlay
   position: absolute
   top: 12px
-  left: 12px
+  left: 25px
   z-index: 10
   width: min(420px, calc(100vw - 24px))
 
-.controls
+.add-marker
   position: absolute
   top: 9px
   right: 45px
   z-index: 10
 
-.controls button
+.add-marker button
   padding: 7px 12px
   border-radius: 5px
   border: 1px solid rgba(0,0,0,0.15)
   background: rgba(255,255,255,0.95)
   cursor: pointer
+
+.planner
+  position: fixed
+  top: 80px
+  right: 24px
+  width: 340px
+  height: 420px
+  overflow: auto
+  resize: both
+  min-width: 260px
+  min-height: 220px
+  max-width: 80vw
+  max-height: 80vh
+  z-index: 1000
+  background: white
+  border: 1px solid #ddd
+  border-radius: 12px
+  box-shadow: 0 10px 30px rgba(0,0,0,0.12)
+  transition: transform 0.25s ease, opacity 0.25s ease
+
+.planner.cdk-drag-dragging
+  transition: none
+
+.planner-header
+  cursor: move
+  padding: 10px 12px
+  border-bottom: 1px solid #eee
+  display: flex
+  justify-content: space-between
+  align-items: center
+  user-select: none
+
+.planner.collapsed
+  transform: translateX(120%)
+  opacity: 0
+  pointer-events: none
+
+.planner-toggle
+  position: absolute
+  top: 9px
+  right: 145px
+  width: 33px
+  height: 33px
+  border-radius: 10px
+  border: 1px solid rgba(0,0,0,0.15)
+  background: rgba(255,255,255,0.95)
+  cursor: pointer
+
+.marker-list
+  display: flex
+  flex-direction: column
+  gap: 8px
+  padding: 10px 12px
+
+.marker-row
+  display: flex
+  align-items: center
+  gap: 10px
+  padding: 8px 10px
+  border: 1px solid #eee
+  border-radius: 10px
+  background: white
+
+.order
+  width: 26px
+  height: 26px
+  border-radius: 8px
+  display: flex
+  align-items: center
+  justify-content: center
+  border: 1px solid #eee
+  font-weight: 600
+  font-size: 13px
+
+.meta
+  flex: 1
+
+.title
+  font-weight: 600
+
+.sub
+  font-size: 12px
+  opacity: 0.7
+
+.controls
+  display: flex
+  flex-direction: column
+  gap: 6px
+
+.controls button
+  width: 32px
+  height: 28px
+  border-radius: 8px
+  border: 1px solid rgba(0,0,0,0.15)
+  background: rgba(255,255,255,0.95)
+  cursor: pointer
+
+.controls button:disabled
+  opacity: 0.4
+  cursor: default
