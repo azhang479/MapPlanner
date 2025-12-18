@@ -35,15 +35,7 @@ export class MapComponent {
   public plannerPos = { x: 0, y: 0 };
 
 
-
-  //method for adding a marker on click based on addMarkerMode
-  private onMapClick = (e: any) => {
-    //console logs and checks
-    console.log("onClick")
-    console.log("marker mode:", this.addMarkerMode)
-    const coords = e.lngLat
-    if (!this.addMarkerMode) return;
-
+  private createMarker(map: mapboxgl.Map, nameIn: string, coords: any) {
     //create new marker & marker entry as placeholders
     const marker = new this.mapboxgl.Marker({ color: '#FF0000', scale: 0.9 })
       .setLngLat([coords["lng"], coords["lat"]])
@@ -51,7 +43,7 @@ export class MapComponent {
     const entry: MarkerEntry = {
       marker: marker,
       editable: false,
-      name: `Custom marker ${this.markerCount}`,
+      name: nameIn,
       id: this.markerCount,
     };
 
@@ -65,33 +57,32 @@ export class MapComponent {
 
     //set button actions
     const removeButton = popupElement.querySelector('#removeButton')!;
-    removeButton.addEventListener('click', () => {
-      marker.remove();
-      this.markerCount--;
-      this.zone.run(() => {
-        this.markers = this.markers.filter(e => e.marker !== marker);
-        this.cdr.detectChanges();
+      removeButton.addEventListener('click', () => {
+        marker.remove();
+        this.markerCount--;
+        this.zone.run(() => {
+          this.markers = this.markers.filter(e => e.marker !== marker);
+          this.cdr.detectChanges();
+        });
       });
-    });
 
-    const editElement = popupElement.querySelector('h1') as HTMLElement;
+      const editElement = popupElement.querySelector('h1') as HTMLElement;
 
-    const editButton = popupElement.querySelector('#editButton')!;
-    editButton.addEventListener('click', () => {
-      this.zone.run(() => {
-        entry.editable = !entry.editable;
-        editElement.contentEditable = String(entry.editable);
-        editElement.focus();
-        this.cdr.detectChanges();
+      const editButton = popupElement.querySelector('#editButton')!;
+      editButton.addEventListener('click', () => {
+        this.zone.run(() => {
+          entry.editable = !entry.editable;
+          editElement.contentEditable = String(entry.editable);
+          editElement.focus();
+          this.cdr.detectChanges();
+        });
       });
-    });
-    editElement.addEventListener('blur', () => {
-      this.zone.run(() => {
-        entry.name = editElement.innerText.trim() || entry.name;
-        this.cdr.detectChanges();
+      editElement.addEventListener('blur', () => {
+        this.zone.run(() => {
+          entry.name = editElement.innerText.trim() || entry.name;
+          this.cdr.detectChanges();
+        });
       });
-    });
-
 
     //create popup with the HTML and set it on the marker
     const popup = new this.mapboxgl.Popup({ offset: 25 }).setDOMContent(popupElement);
@@ -104,6 +95,18 @@ export class MapComponent {
     this.markerCount++;
     this.markers.push(entry);
     this.updateMarkers();
+  }
+
+  //method for adding a marker on click based on addMarkerMode
+  private onMapClick = (e: any) => {
+    //console logs and checks
+    console.log("onClick");
+    console.log("marker mode:", this.addMarkerMode);
+    const coords = e.lngLat
+    if (!this.addMarkerMode) return;
+
+    //create marker and add it to map
+    this.createMarker(this.map, `Custom marker ${this.markerCount}`, coords);
 
     //update "add marker" button
     this.zone.run(() => {
@@ -178,15 +181,23 @@ export class MapComponent {
 
     //currently zooms into location when a location is retireved 
     searchBox.addEventListener('retrieve', (e: any) => {
-      console.log("retrieved a location")
       const feature = e.detail;
+      console.log("retrieved a location: ", feature)
       const first = feature?.features?.[0];
       if (!first) {
         console.warn('No features returned from retrieve:', feature);
         return;
       }
       const [lng, lat] = first.geometry.coordinates;
+      const location: Record<string, number> = {
+        'lng': lng,
+        'lat': lat,
+      };
       this.map.flyTo({ center: [lng, lat], zoom: 15 });
+      this.createMarker(this.map, first.properties.name, location)
+      this.zone.run(() => {
+        this.cdr.detectChanges();
+      });
     });
 
 
