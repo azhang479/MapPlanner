@@ -33,13 +33,19 @@ export class MapComponent {
   public addMarkerMode = false;
   public plannerCollapsed = false;
   public plannerPos = { x: 0, y: 0 };
+  
 
 
+  
+//Creates a marker on the map
   private createMarker(map: mapboxgl.Map, nameIn: string, coords: any) {
     //create new marker & marker entry as placeholders
     const marker = new this.mapboxgl.Marker({ color: '#FF0000', scale: 0.9 })
       .setLngLat([coords["lng"], coords["lat"]])
       .setDraggable(true)
+    marker.on('dragend', () => {
+      this.updateRouteFromMarkers('driving');
+    });
     const entry: MarkerEntry = {
       marker: marker,
       editable: false,
@@ -59,9 +65,10 @@ export class MapComponent {
     const removeButton = popupElement.querySelector('#removeButton')!;
       removeButton.addEventListener('click', () => {
         marker.remove();
-        this.markerCount--;
         this.zone.run(() => {
           this.markers = this.markers.filter(e => e.marker !== marker);
+          this.updateMarkers()
+          this.updateRouteFromMarkers('driving');
           this.cdr.detectChanges();
         });
       });
@@ -95,9 +102,12 @@ export class MapComponent {
     this.markerCount++;
     this.markers.push(entry);
     this.updateMarkers();
+    this.updateRouteFromMarkers('driving');
   }
 
-  //method for adding a marker on click based on addMarkerMode
+
+
+//method for adding a marker on click based on addMarkerMode
   private onMapClick = (e: any) => {
     //console logs and checks
     console.log("onClick");
@@ -114,6 +124,98 @@ export class MapComponent {
       this.cdr.detectChanges();
     });
   };
+
+
+
+//adds a route layer onto the map
+  private ensureRouteLayer() {
+    if (!this.map) return;
+
+    // Create source/layer once
+    if (!this.map.getSource('route')) {
+      this.map.addSource('route', {
+        type: 'geojson',
+        data: {
+          type: 'Feature',
+          properties: {},
+          geometry: { type: 'LineString', coordinates: [] },
+        },
+      });
+
+      this.map.addLayer({
+        id: 'route',
+        type: 'line',
+        source: 'route',
+        layout: {
+          'line-join': 'round',
+          'line-cap': 'round',
+        },
+        paint: {
+          'line-width': 3,
+        },
+      });
+    }
+  }
+
+
+
+//sets the path of the geometry 
+  private setRouteGeometry(coords: number[][]) {
+    const src = this.map?.getSource('route') as any;
+    if (!src) return;
+
+    src.setData({
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'LineString',
+        coordinates: coords,
+      },
+    });
+  }
+
+
+
+//gets marker coordinates
+  private getMarkerCoords(): [number, number][] {
+    return this.markers.map((m) => {
+      const ll = m.marker.getLngLat();
+      return [ll.lng, ll.lat];
+    });
+  }
+
+
+  //updates the route based on the markers
+  private async updateRouteFromMarkers(profile: 'driving' | 'walking' | 'cycling' = 'driving') {
+    if (!this.map) return;
+
+    this.ensureRouteLayer();
+
+    const coords = this.getMarkerCoords();
+
+    if (coords.length < 2) {
+      this.setRouteGeometry([]);
+      return;
+    }
+
+    const coordString = coords.map(([lng, lat]) => `${lng},${lat}`).join(';');
+
+    const url =
+      `https://api.mapbox.com/directions/v5/mapbox/${profile}/${coordString}` +
+      `?geometries=geojson&overview=full&steps=false&access_token=${'pk.eyJ1IjoiMjNhemhhbmciLCJhIjoiY21qNXgyZTliMDZ3bDNmcTA5cGpjMGJxeSJ9.8WzQ1ADAhCJGMos5P5nsrw'}`;
+
+    const res = await fetch(url);
+    if (!res.ok) {
+      console.warn('Directions API error:', res.status, await res.text());
+      return;
+    }
+
+    const json = await res.json();
+    const routeCoords: number[][] = json?.routes?.[0]?.geometry?.coordinates ?? [];
+
+    this.setRouteGeometry(routeCoords);
+  }
+
 
 
   //gets the position of drag then sets the planner position
@@ -148,6 +250,8 @@ export class MapComponent {
     mapboxgl.accessToken = 'pk.eyJ1IjoiMjNhemhhbmciLCJhIjoiY21qNXgyZTliMDZ3bDNmcTA5cGpjMGJxeSJ9.8WzQ1ADAhCJGMos5P5nsrw';
     this.mapboxgl = mapboxgl
 
+
+
     //create new map
     this.map = new mapboxgl.Map({
       container: 'map', // container id
@@ -156,6 +260,13 @@ export class MapComponent {
       zoom: 9 //starting zoom
     });
       
+
+    
+    //load the route layer on the map
+    this.map.on('load', () => {
+      this.ensureRouteLayer();
+      this.updateRouteFromMarkers('driving');
+    });
 
 
     //import search function and sync proximity to our viewbox
@@ -212,39 +323,6 @@ export class MapComponent {
         showUserHeading: true,
     }));
 
-    //dont work rn
-    /*
-    var coords: any[];
-    this.markers.forEach(marker => {
-      coords.push(marker.marker.getLngLat())
-    });
-    
-    this.map.addSource('route', {
-        'type': 'geojson',
-        'data': {
-            'type': 'Feature',
-            'properties': {},
-            'geometry': {
-                'type': 'LineString',
-                'coordinates': coords!
-            }
-    }
-  });
-
-    this.map.addLayer({
-        'id': 'route',
-        'type': 'line',
-        'source': 'route',
-        'layout': {
-            'line-join': 'round',
-            'line-cap': 'round'
-        },
-        'paint': {
-            'line-color': '#888',
-            'line-width': 8
-        }
-    });
-    */
     this.map.on('click', this.onMapClick);
   }
 
@@ -269,7 +347,7 @@ export class MapComponent {
     if (i <= 0) return;
     [this.markers[i - 1], this.markers[i]] = [this.markers[i], this.markers[i - 1]];
     this.updateMarkers();
-    // later: this.rebuildRouteFromMarkers();
+    this.updateRouteFromMarkers('driving');
   }
 
   //moves the marker down
@@ -277,6 +355,6 @@ export class MapComponent {
     if (i >= this.markers.length - 1) return;
     [this.markers[i + 1], this.markers[i]] = [this.markers[i], this.markers[i + 1]];
     this.updateMarkers();
-    // later: this.rebuildRouteFromMarkers();
+    this.updateRouteFromMarkers('driving');
   }
 }
